@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>동바리 높이 산출기</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Pretendard',-apple-system,'Noto Sans KR','Apple SD Gothic Neo',sans-serif;color:#0F172A;background:#fff;-webkit-text-size-adjust:100%}
+input[type=number]{-moz-appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>
+const{useState,useMemo,createElement:h}=React;
+const POSTS=[{id:"P17",height:1725,label:"P17",color:"#D85A30"},{id:"P12",height:1291,label:"P12",color:"#E8913C"},{id:"P8",height:863,label:"P8",color:"#1D9E75"},{id:"P4",height:432,label:"P4",color:"#378ADD"},{id:"P2",height:216,label:"P2",color:"#7F77DD"}];
+const FILL=POSTS.slice(1);
+const C={slab:"#64748B",plywood:"#D4C4A8",joist:"#C49A6C",timber:"#8B6F47",mongye:"#A0522D",uhead:"#475569",jbase:"#334155",p2fix:"#7F77DD"};
+const J_MIN=100,J_MAX=400,U_MIN=100,U_MAX=400,P2H=216;
+
+function solve(target){
+  if(target<500)return null;
+  const body=target-P2H,maxP17=Math.floor((body-J_MIN-U_MIN)/1725);
+  if(maxP17<0)return null;
+  const results=[];
+  for(let p17=maxP17;p17>=Math.max(0,maxP17-2);p17--){
+    const gap=body-p17*1725,fH=FILL.map(p=>p.height),found=[];
+    function tryFill(idx,combo){
+      if(idx===fH.length){const ju=gap-combo.reduce((s,c,i)=>s+c*fH[i],0);if(ju<J_MIN+U_MIN||ju>J_MAX+U_MAX)return;const j=Math.max(J_MIN,Math.min(J_MAX,Math.round(ju/2))),u=ju-j;if(u>=U_MIN&&u<=U_MAX)found.push({c:[...combo],j,u,n:combo.reduce((a,b)=>a+b,0)});return;}
+      const mx=Math.min(Math.floor((gap-J_MIN-U_MIN)/fH[idx]),3);
+      for(let c=0;c<=mx;c++){combo[idx]=c;const used=combo.reduce((s,cc,i)=>i<=idx?s+cc*fH[i]:s,0);if(gap-used>=J_MIN+U_MIN)tryFill(idx+1,combo);}combo[idx]=0;
+    }
+    if(gap>=J_MIN+U_MIN&&gap<=J_MAX+U_MAX){const j=Math.max(J_MIN,Math.min(J_MAX,Math.round(gap/2))),u=gap-j;if(u>=U_MIN&&u<=U_MAX)found.push({c:[0,0,0,0],j,u,n:0});}
+    tryFill(0,[0,0,0,0]);
+    found.sort((a,b)=>a.n-b.n||Math.abs(a.j-a.u)-Math.abs(b.j-b.u));
+    const seen=new Set();
+    for(const f of found){const k=f.c.join(",")+f.j+"|"+f.u;if(seen.has(k))continue;seen.add(k);results.push({p17,fc:f.c,j:f.j,u:f.u,tp:p17+f.n+1});if(results.length>=3)return results;}
+  }
+  return results.length?results:null;
+}
+
+function Diagram({r,floorH:fH,sl,pl,js,tb,mg}){
+  const H=420,bx=100,bw=60;
+  const fillH=FILL.reduce((s,p,i)=>s+p.height*r.fc[i],0);
+  const shH=r.j+P2H+r.p17*1725+fillH+r.u;
+  const sc=(H-50)/Math.max(shH+mg+tb+js+pl+sl,fH);
+  let y=H-16;const S=[];
+  const draw=(hh,label,color)=>{const ph=hh*sc;y-=ph;S.push({y,h:ph,label,color,dim:hh});};
+  draw(r.j,"J/"+r.j,C.jbase);draw(P2H,"P2",C.p2fix);
+  for(let c=0;c<r.p17;c++)draw(1725,"P17",POSTS[0].color);
+  for(let i=0;i<4;i++)for(let c=0;c<r.fc[i];c++)draw(FILL[i].height,FILL[i].label,FILL[i].color);
+  draw(r.u,"U/"+r.u,C.uhead);const stY=y;
+  const FW=[];
+  [[mg,"멍에",C.mongye],[tb,"각재",C.timber],[js,"장선",C.joist],[pl,"합판",C.plywood]].forEach(([v,l,c])=>{if(v>0){const ph=v*sc;y-=ph;FW.push({y,h:ph,l,c,d:v});}});
+  const sH=sl*sc;y-=sH;
+  const els=[];
+  els.push(h("line",{x1:55,y1:H-14,x2:220,y2:H-14,stroke:"#94A3B8",strokeWidth:2,strokeDasharray:"6 3",key:"gl"}));
+  els.push(h("text",{x:224,y:H-8,fontSize:9,fill:"#94A3B8",key:"glt"},"GL"));
+  els.push(h("rect",{x:bx-15,y,width:bw+30,height:Math.max(sH,4),fill:C.slab,rx:2,key:"slab"}));
+  if(sH>12)els.push(h("text",{x:bx+bw/2,y:y+sH/2+3,fontSize:8,fill:"#fff",textAnchor:"middle",fontWeight:600,key:"slabt"},"SLAB "+sl));
+  FW.forEach((f,i)=>{els.push(h("rect",{x:bx-8,y:f.y,width:bw+16,height:Math.max(f.h,3),fill:f.c,rx:2,key:"fw"+i}));if(f.h>10)els.push(h("text",{x:bx+bw/2,y:f.y+f.h/2+3,fontSize:8,fill:"#fff",textAnchor:"middle",fontWeight:600,key:"fwt"+i},f.l));els.push(h("text",{x:bx+bw+10,y:f.y+f.h/2+3,fontSize:8,fill:f.c,key:"fwd"+i},f.d));});
+  S.forEach((s,i)=>{els.push(h("rect",{x:bx,y:s.y,width:bw,height:Math.max(s.h,3),fill:s.color,rx:4,stroke:"rgba(255,255,255,0.15)",strokeWidth:.5,key:"s"+i}));if(s.h>14)els.push(h("text",{x:bx+bw/2,y:s.y+s.h/2+4,fontSize:10,fill:"#fff",textAnchor:"middle",fontWeight:700,key:"st"+i},s.label));els.push(h("text",{x:bx+bw+10,y:s.y+s.h/2+3,fontSize:9,fill:"#64748B",key:"sd"+i},s.dim));});
+  els.push(h("line",{x1:40,y1:stY,x2:40,y2:H-16,stroke:"#1D9E75",strokeWidth:1.5,key:"b1"}));
+  els.push(h("line",{x1:36,y1:stY,x2:44,y2:stY,stroke:"#1D9E75",strokeWidth:1.5,key:"b2"}));
+  els.push(h("line",{x1:36,y1:H-16,x2:44,y2:H-16,stroke:"#1D9E75",strokeWidth:1.5,key:"b3"}));
+  els.push(h("text",{x:34,y:(stY+H-16)/2,fontSize:10,fill:"#1D9E75",textAnchor:"middle",fontWeight:700,transform:"rotate(-90,34,"+((stY+H-16)/2)+")",key:"b4"},shH+"mm"));
+  els.push(h("line",{x1:16,y1:y,x2:16,y2:H-16,stroke:"#334155",strokeWidth:1,key:"t1"}));
+  els.push(h("line",{x1:12,y1:y,x2:20,y2:y,stroke:"#334155",strokeWidth:1,key:"t2"}));
+  els.push(h("line",{x1:12,y1:H-16,x2:20,y2:H-16,stroke:"#334155",strokeWidth:1,key:"t3"}));
+  els.push(h("text",{x:10,y:(y+H-16)/2,fontSize:9,fill:"#334155",textAnchor:"middle",fontWeight:600,transform:"rotate(-90,10,"+((y+H-16)/2)+")",key:"t4"},fH+"mm"));
+  return h("svg",{width:"260",height:H,viewBox:"0 0 260 "+H,style:{display:"block",flexShrink:0,maxWidth:"100%"}},els);
+}
+
+function Card({r,idx,floorH:fH,sl,pl,js,tb,mg}){
+  const fillH=FILL.reduce((s,p,i)=>s+p.height*r.fc[i],0);
+  const shH=r.j+P2H+r.p17*1725+fillH+r.u;
+  const stack=["J/"+r.j,"P2"];for(let c=0;c<r.p17;c++)stack.push("P17");for(let i=0;i<4;i++)for(let c=0;c<r.fc[i];c++)stack.push(FILL[i].label);stack.push("U/"+r.u);
+  const cm=k=>k[0]==="J"?C.jbase:k==="P2"?C.p2fix:k==="P17"?POSTS[0].color:k[0]==="U"?C.uhead:(FILL.find(f=>f.label===k)||{}).color||"#999";
+  const Ro=({icon,label,name,val})=>h("tr",{style:{borderBottom:"1px solid rgba(0,0,0,0.06)"}},h("td",{style:{padding:"5px 0",width:24}},h("span",{style:{display:"inline-block",width:10,height:10,borderRadius:2,background:icon}})),h("td",{style:{padding:"5px 0",color:"#64748B",width:50,fontSize:12}},label),h("td",{style:{padding:"5px 0",fontWeight:700,fontSize:13}},name),h("td",{style:{padding:"5px 0",color:"#94A3B8",textAlign:"right",fontSize:12}},val+"mm"));
+  return h("div",{style:{background:idx===0?"rgba(29,158,117,0.04)":"rgba(0,0,0,0.01)",border:idx===0?"2px solid #1D9E75":"1px solid rgba(0,0,0,0.08)",borderRadius:16,padding:16,position:"relative",marginBottom:12}},
+    idx===0&&h("div",{style:{position:"absolute",top:-10,left:16,background:"#1D9E75",color:"#fff",fontSize:11,fontWeight:700,padding:"2px 12px",borderRadius:20}},"BEST"),
+    h("div",{style:{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10,padding:"6px 8px",background:"rgba(0,0,0,0.03)",borderRadius:8,alignItems:"center"}},stack.map((s,i)=>h("span",{key:i,style:{display:"inline-flex",alignItems:"center"}},h("span",{style:{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,background:cm(s),color:"#fff"}},s),i<stack.length-1&&h("span",{style:{color:"#CBD5E1",fontSize:9,margin:"0 1px"}},"→")))),
+    h("div",{style:{display:"flex",gap:10,alignItems:"flex-start",flexWrap:"wrap"}},
+      h(Diagram,{r,floorH:fH,sl,pl,js,tb,mg}),
+      h("div",{style:{flex:1,minWidth:180}},
+        h("table",{style:{width:"100%",borderCollapse:"collapse"}},h("tbody",null,
+          h(Ro,{icon:C.jbase,label:"하부",name:"J/"+r.j,val:r.j}),
+          h(Ro,{icon:C.p2fix,label:"고정",name:"P2 × 1",val:216}),
+          r.p17>0&&h(Ro,{icon:POSTS[0].color,label:"수직재",name:"P17 × "+r.p17,val:r.p17*1725}),
+          FILL.map((p,i)=>r.fc[i]>0&&h(Ro,{key:p.id,icon:p.color,label:"보정",name:p.label+" × "+r.fc[i],val:p.height*r.fc[i]})),
+          h(Ro,{icon:C.uhead,label:"상부",name:"U/"+r.u,val:r.u}),
+          h("tr",{style:{background:"rgba(29,158,117,0.06)"}},h("td",{colSpan:2,style:{padding:"8px 0",fontWeight:700,color:"#0F6E56",fontSize:13}},"동바리"),h("td",{style:{padding:"8px 0",fontWeight:800,color:"#1D9E75",fontSize:15}},shH.toLocaleString()+"mm"),h("td",{style:{padding:"8px 0",color:"#0F6E56",textAlign:"right",fontWeight:600,fontSize:11}},"수직재 "+r.tp+"개")),
+          h("tr",null,h("td",{colSpan:4,style:{height:4}})),
+          [["멍에",mg,C.mongye],["각재",tb,C.timber],["장선",js,C.joist],["합판",pl,C.plywood],["슬래브",sl,C.slab]].filter(x=>x[1]>0).map(([l,v,c])=>h("tr",{key:l,style:{borderBottom:"1px solid rgba(0,0,0,0.04)"}},h("td",{style:{padding:"3px 0"}},h("span",{style:{display:"inline-block",width:10,height:10,borderRadius:2,background:c}})),h("td",{colSpan:2,style:{padding:"3px 0",color:"#78716C",fontSize:12}},l),h("td",{style:{padding:"3px 0",color:"#78716C",fontSize:12,textAlign:"right"}},v+"mm")))
+        ))
+      )
+    )
+  );
+}
+
+function NI({label,value,onChange,placeholder,accent}){
+  return h("div",{style:{flex:"1 1 60px",minWidth:60}},
+    h("div",{style:{fontSize:11,fontWeight:600,color:"#64748B",marginBottom:4,display:"flex",alignItems:"center",gap:4}},accent&&h("span",{style:{width:8,height:8,borderRadius:2,background:accent}}),label),
+    h("div",{style:{display:"flex",alignItems:"center",gap:3}},
+      h("input",{type:"number",value,onChange:e=>onChange(e.target.value),placeholder,style:{width:"100%",padding:"8px 6px",fontSize:14,fontWeight:700,border:"1.5px solid #CBD5E1",borderRadius:8,outline:"none",background:"#fff",color:"#0F172A",boxSizing:"border-box"}}),
+      h("span",{style:{fontSize:10,color:"#94A3B8",fontWeight:600}},"mm")
+    )
+  );
+}
+
+function App(){
+  const[floorH,setFloorH]=useState("");
+  const[slabT,setSlabT]=useState("200");
+  const[plywood,setPlywood]=useState("12");
+  const[joist,setJoist]=useState("50");
+  const[timber,setTimber]=useState("120");
+  const[mongye,setMongye]=useState("75");
+  const f=parseInt(floorH)||0,sl=parseInt(slabT)||0,pl=parseInt(plywood)||0;
+  const js=parseInt(joist)||0,tb=parseInt(timber)||0,mg=parseInt(mongye)||0;
+  const ded=sl+pl+js+tb+mg,sh=f-ded;
+  const results=useMemo(()=>sh>=500?solve(sh):null,[sh]);
+
+  return h("div",{style:{maxWidth:720,margin:"0 auto",padding:"12px 12px 24px"}},
+    h("div",{style:{textAlign:"center",padding:"12px 0 10px"}},
+      h("div",{style:{display:"inline-flex",background:"#0F172A",color:"#fff",padding:"5px 14px",borderRadius:24,fontSize:10,fontWeight:700,letterSpacing:"0.1em"}},"SYSTEM SHORING CALCULATOR"),
+      h("h1",{style:{fontSize:22,fontWeight:800,margin:"6px 0 2px"}},"동바리 높이 산출기"),
+      h("p",{style:{fontSize:11,color:"#64748B"}},"J → P2(고정) → P17 최대 → 보정재 → U → 멍에")
+    ),
+    h("div",{style:{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:14,padding:"14px 14px 10px",marginBottom:12}},
+      h("div",{style:{fontSize:11,fontWeight:700,color:"#475569",marginBottom:5}},"층고 (FL to FL)"),
+      h("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+        h("input",{type:"number",value:floorH,onChange:e=>setFloorH(e.target.value),placeholder:"예: 5500",style:{flex:1,padding:"10px 12px",fontSize:20,fontWeight:700,border:"2px solid #CBD5E1",borderRadius:10,outline:"none",background:"#fff",color:"#0F172A",boxSizing:"border-box"}}),
+        h("span",{style:{fontSize:14,color:"#64748B",fontWeight:700}},"mm")
+      ),
+      h("div",{style:{display:"flex",gap:5,marginTop:6,flexWrap:"wrap"}},
+        [[5200,"B1→1F"],[5500,""],[5700,"1F→2F"],[4800,"2F→3F"],[5050,"3F→PH"]].map(([v,l])=>
+          h("button",{key:v,onClick:()=>setFloorH(""+v),style:{padding:"4px 10px",fontSize:11,fontWeight:600,border:"1px solid #E2E8F0",borderRadius:14,cursor:"pointer",background:f===v?"#1D9E75":"#fff",color:f===v?"#fff":"#64748B"}},(l?l+" ":"")+(v/1000).toFixed(1)+"m"))
+      ),
+      h("div",{style:{background:"#fff",border:"1px solid #E2E8F0",borderRadius:10,padding:10,marginTop:10}},
+        h("div",{style:{fontSize:11,fontWeight:700,color:"#475569",marginBottom:8}},"공제 항목"),
+        h("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+          h(NI,{label:"슬래브",value:slabT,onChange:setSlabT,placeholder:"200",accent:C.slab}),
+          h(NI,{label:"합판",value:plywood,onChange:setPlywood,placeholder:"12",accent:C.plywood}),
+          h(NI,{label:"장선",value:joist,onChange:setJoist,placeholder:"50",accent:C.joist}),
+          h(NI,{label:"각재",value:timber,onChange:setTimber,placeholder:"120",accent:C.timber}),
+          h(NI,{label:"멍에",value:mongye,onChange:setMongye,placeholder:"75",accent:C.mongye})
+        ),
+        h("div",{style:{marginTop:6,paddingTop:6,borderTop:"1px dashed #E2E8F0",fontSize:11,color:"#64748B"}},"공제 합계: ",h("strong",null,ded+"mm"))
+      ),
+      f>0&&h("div",{style:{marginTop:8,padding:"8px 10px",borderRadius:8,background:sh>=500?"rgba(29,158,117,0.08)":"rgba(239,68,68,0.08)"}},
+        h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          h("span",{style:{fontSize:12,fontWeight:600,color:"#475569"}},"동바리 높이 = "+f+" - "+ded),
+          h("span",{style:{fontSize:18,fontWeight:800,color:sh>=500?"#1D9E75":"#EF4444"}},sh.toLocaleString()+"mm")
+        )
+      )
+    ),
+    f>0&&!results&&h("div",{style:{textAlign:"center",padding:24,color:"#94A3B8",fontSize:13,background:"#F8FAFC",borderRadius:12}},sh<500?"동바리 높이 부족":"조합을 찾을 수 없습니다"),
+    results&&h("div",null,
+      h("div",{style:{fontSize:12,fontWeight:600,color:"#64748B",marginBottom:10}},results.length+"개 조합 — P17 최대 "+results[0].p17+"개"),
+      results.map((r,i)=>h(Card,{key:i,r,idx:i,floorH:f,sl,pl,js,tb,mg}))
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+</script>
+</body>
+</html>
